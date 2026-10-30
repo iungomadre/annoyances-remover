@@ -15,6 +15,7 @@ for (const input of inputs) {
 const siteSection = document.getElementById("site");
 const rulesList = document.getElementById("rules");
 const noRules = document.getElementById("no-rules");
+const ruleCount = document.getElementById("rule-count");
 const autoApply = document.getElementById("auto-apply");
 
 function activeSite(tab) {
@@ -56,33 +57,82 @@ async function startPicker(tabId, { refineId = null, autoApply }) {
   window.close();
 }
 
+const ICONS = {
+  refine: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.5 2.5v3h-3"/></svg>',
+  remove: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+};
+
+const TAG_NAMES = { a: "Link", button: "Button", img: "Image", svg: "Icon", video: "Video", iframe: "Embedded frame", input: "Input" };
+
+function friendlyTag(tag) {
+  return TAG_NAMES[tag] ?? "Element";
+}
+
+// What the user recognises the pick by (its text), and how it's matched.
+function describeRule(rule) {
+  if (rule.type === "selector") {
+    const tag = rule.selector.split(" > ").at(-1).match(/^[a-z][a-z0-9-]*/)?.[0];
+    // Position is used both for picks without text and for ones too large to compare.
+    const kind = rule.label.includes("too large") ? "covering a large area" : "without readable text";
+    return { title: `${friendlyTag(tag)} ${kind}`, meta: "Matched by its position on the page" };
+  }
+  if (!rule.pattern) {
+    return { title: rule.text ?? rule.label, meta: "Saved in an old format and no longer hidden. Remove it and pick it again", warning: true };
+  }
+  if (!rule.pattern.some(isWord)) {
+    return { title: `${friendlyTag(rule.tag)} with any text`, meta: "Matched by its layout only" };
+  }
+  const text = rule.pattern
+    .filter((token) => token === null || isWord(token))
+    .map((token) => token ?? "…")
+    .join(" ")
+    .replace(/…( …)+/g, "…");
+  const meta = rule.pattern.includes(null) ? "Matches this text, ignoring the parts that change" : "Matches this exact text";
+  return { title: `“${text}”`, meta };
+}
+
+function iconButton(kind, label, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `icon-button ${kind}`;
+  button.title = label;
+  button.setAttribute("aria-label", label);
+  button.innerHTML = ICONS[kind];
+  button.addEventListener("click", onClick);
+  return button;
+}
+
 function renderRules(tabId, host, rules) {
   rulesList.replaceChildren(
     ...rules.map((rule) => {
+      const { title, meta, warning } = describeRule(rule);
       const item = document.createElement("li");
-      const label = document.createElement("span");
-      label.textContent = rule.label;
-      label.title = rule.label;
-      item.append(label);
+      const text = document.createElement("div");
+      text.className = "rule-text";
+      const titleElement = document.createElement("span");
+      titleElement.className = "rule-title";
+      titleElement.textContent = title;
+      titleElement.title = title;
+      const metaElement = document.createElement("span");
+      metaElement.className = warning ? "rule-meta warning" : "rule-meta";
+      metaElement.textContent = meta;
+      text.append(titleElement, metaElement);
+      item.append(text);
       if (rule.type === "text" && rule.pattern) {
-        const refine = document.createElement("button");
-        refine.type = "button";
-        refine.textContent = "↻";
-        refine.title = "Its content changed? Pick it again and the parts that differ will be ignored";
-        refine.addEventListener("click", () => startPicker(tabId, { refineId: rule.id, autoApply: autoApply.checked }));
-        item.append(refine);
+        item.append(
+          iconButton("refine", "Content changed? Pick it again and the parts that differ will be ignored", () =>
+            startPicker(tabId, { refineId: rule.id, autoApply: autoApply.checked }),
+          ),
+        );
       }
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.textContent = "×";
-      remove.title = "Stop hiding this";
-      remove.addEventListener("click", () => {
-        saveRules(host, rules.filter((other) => other.id !== rule.id));
-      });
-      item.append(remove);
+      item.append(
+        iconButton("remove", "Stop hiding this", () => saveRules(host, rules.filter((other) => other.id !== rule.id))),
+      );
       return item;
     }),
   );
+  ruleCount.textContent = rules.length || "";
+  ruleCount.hidden = !rules.length;
   noRules.hidden = rules.length > 0;
 }
 

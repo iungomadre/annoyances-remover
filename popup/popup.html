@@ -27,14 +27,19 @@
           </span>
           <input type="checkbox" class="switch" id="auto-apply" />
         </label>
+        <div class="list-heading">
+          <h3>Hidden on this site</h3>
+          <span id="rule-count" class="count"></span>
+        </div>
         <ul id="rules"></ul>
-        <p id="no-rules" class="empty">Nothing hidden on this site yet.</p>
+        <p id="no-rules" class="empty-card">Nothing hidden here yet.</p>
         <button id="pick" type="button">Pick element to hide</button>
       </section>
 
       <p id="unsupported" class="empty" hidden>Chrome doesn't allow extensions to run on this page.</p>
     </main>
     <script src="../settings.js"></script>
+    <script src="../pattern.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>
