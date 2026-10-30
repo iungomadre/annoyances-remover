@@ -22,33 +22,50 @@
 
   let textRules = [];
 
-  // Climbs from the text node containing the rule's anchor to the rank-th
-  // ancestor with the picked element's tag and full text.
-  function findRuleElement(element, rule) {
-    let rank = 0;
-    for (; element && element !== document.body; element = element.parentElement) {
-      const text = normalizeText(element.textContent);
-      if (text.length > rule.text.length) return null;
-      if (text !== rule.text || element.localName !== rule.tag) continue;
-      if (rank === rule.rank) return element;
-      rank++;
+  function prefixLength(pattern) {
+    const wildcard = pattern.indexOf(null);
+    return wildcard === -1 ? pattern.length : wildcard;
+  }
+
+  // Checks the cheap fixed prefix first, so most candidates are rejected after
+  // a few tokens instead of a full walk.
+  function matchesRule(element, rule) {
+    if (element.localName !== rule.tag) return false;
+    const prefix = prefixLength(rule.pattern);
+    const head = tokenize(element, prefix);
+    for (let i = 0; i < prefix; i++) {
+      if (head[i] !== rule.pattern[i]) return false;
     }
-    return null;
+    const tokens = tokenize(element, rule.maxTokens);
+    return tokens.length <= rule.maxTokens && matchesPattern(tokens, rule.pattern);
+  }
+
+  function findMatches(rule, matched) {
+    if (!rule.anchor) {
+      for (const element of document.body.getElementsByTagName(rule.tag)) {
+        if (matchesRule(element, rule)) matched.add(element);
+      }
+      return;
+    }
+
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      if (!walker.currentNode.nodeValue.includes(rule.anchor)) continue;
+      for (let element = walker.currentNode.parentElement; element && element !== document.body; element = element.parentElement) {
+        if (element.localName !== rule.tag) continue;
+        // Ancestors only get bigger, so once one is too large none will match.
+        if (tokenize(element, rule.maxTokens).length > rule.maxTokens) break;
+        if (matchesRule(element, rule)) {
+          matched.add(element);
+          break;
+        }
+      }
+    }
   }
 
   function markMatches() {
     const matched = new Set();
-    if (textRules.length) {
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-      while (walker.nextNode()) {
-        const textNode = walker.currentNode;
-        for (const rule of textRules) {
-          if (!textNode.nodeValue.includes(rule.anchor)) continue;
-          const element = findRuleElement(textNode.parentElement, rule);
-          if (element) matched.add(element);
-        }
-      }
-    }
+    for (const rule of textRules) findMatches(rule, matched);
 
     for (const element of document.querySelectorAll(`[${HIDDEN_ATTR}]`)) {
       if (!matched.has(element)) element.removeAttribute(HIDDEN_ATTR);
@@ -59,7 +76,8 @@
   }
 
   function applyRules(rules) {
-    textRules = rules.filter((rule) => rule.type === "text");
+    // Text picks saved before patterns existed have no pattern and are skipped.
+    textRules = rules.filter((rule) => rule.type === "text" && rule.pattern);
     // One CSS rule per selector, so a single invalid selector can't void the rest.
     selectorStyle.textContent = rules
       .filter((rule) => rule.type === "selector")

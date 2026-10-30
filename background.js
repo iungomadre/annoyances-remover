@@ -10,7 +10,7 @@ async function syncContentScripts() {
     {
       id: CONTENT_SCRIPT_ID,
       matches: origins,
-      js: ["settings.js", "content.js"],
+      js: ["settings.js", "pattern.js", "content.js"],
       runAt: "document_idle",
     },
   ]);

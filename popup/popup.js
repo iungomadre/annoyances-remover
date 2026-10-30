@@ -35,17 +35,38 @@ async function ensureContentScript(tabId) {
     func: () => globalThis.pageHiderLoaded === true,
   });
   if (!loaded) {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ["settings.js", "content.js"] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["settings.js", "pattern.js", "content.js"] });
   }
 }
 
-function renderRules(host, rules) {
+async function startPicker(tabId, refineId = null) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    func: (id) => {
+      globalThis.pageHiderRefineId = id;
+    },
+    args: [refineId],
+  });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["picker.js"] });
+  window.close();
+}
+
+function renderRules(tabId, host, rules) {
   rulesList.replaceChildren(
     ...rules.map((rule) => {
       const item = document.createElement("li");
       const label = document.createElement("span");
       label.textContent = rule.label;
-      label.title = rule.type === "text" ? rule.text : rule.selector;
+      label.title = rule.label;
+      item.append(label);
+      if (rule.type === "text" && rule.pattern) {
+        const refine = document.createElement("button");
+        refine.type = "button";
+        refine.textContent = "↻";
+        refine.title = "Its content changed? Pick it again and the parts that differ will be ignored";
+        refine.addEventListener("click", () => startPicker(tabId, rule.id));
+        item.append(refine);
+      }
       const remove = document.createElement("button");
       remove.type = "button";
       remove.textContent = "×";
@@ -53,7 +74,7 @@ function renderRules(host, rules) {
       remove.addEventListener("click", () => {
         saveRules(host, rules.filter((other) => other.id !== rule.id));
       });
-      item.append(label, remove);
+      item.append(remove);
       return item;
     }),
   );
@@ -74,10 +95,10 @@ async function init() {
   siteSection.hidden = false;
   document.getElementById("site-name").textContent = site.host;
 
-  renderRules(site.host, await loadRules(site.host));
+  renderRules(tab.id, site.host, await loadRules(site.host));
   chrome.storage.onChanged.addListener((changes, area) => {
     const key = rulesKey(site.host);
-    if (area === "local" && key in changes) renderRules(site.host, changes[key].newValue ?? []);
+    if (area === "local" && key in changes) renderRules(tab.id, site.host, changes[key].newValue ?? []);
   });
 
   autoApply.checked = await chrome.permissions.contains({ origins: [site.origin] });
@@ -87,10 +108,7 @@ async function init() {
     if (!ok) autoApply.checked = !autoApply.checked;
   });
 
-  document.getElementById("pick").addEventListener("click", async () => {
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["picker.js"] });
-    window.close();
-  });
+  document.getElementById("pick").addEventListener("click", () => startPicker(tab.id));
 }
 
 init();

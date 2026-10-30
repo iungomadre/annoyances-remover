@@ -8,7 +8,9 @@ Chrome extension (Manifest V3) for hiding parts of web pages you don't want to s
 2. Hover over what you want gone. **↑** / **↓** widen or narrow the selection, **Esc** cancels
 3. Click to hide it. It's saved for that site and hidden again whenever it reappears
 
-Picks are remembered by their text, so they keep working when the site changes its markup and in any language. Elements without text (or with a lot of it) are remembered by their position on the page instead, which can break when the site updates.
+Picks are remembered by their text and the layout of elements inside them, so they keep working when the site changes its styling and in any language. Elements without text (or very large ones) are remembered by their position on the page instead, which can break when the site updates.
+
+If a pick's content changes between visits (say "Alice is presenting" becomes "Bob is presenting"), click **↻** next to it in the popup and pick it again. The parts that differ are ignored from then on (here, the name), and the rest still has to match. If the text differs completely, only the layout is compared. Picks with too little in common to hide safely are refused.
 
 By default, picks apply once you open the popup on a page. Turn on **Apply on every visit** to hide them automatically on that site; Chrome asks for access to the site the first time.
 
@@ -24,7 +26,7 @@ The **Hide picked elements** switch shows everything again without reloading. Re
 ## Publish to the Chrome Web Store
 
 1. Register at https://chrome.google.com/webstore/devconsole (one-time $5 fee)
-2. `zip -r extension.zip manifest.json background.js settings.js content.js picker.js popup icons`
+2. `zip -r extension.zip manifest.json background.js settings.js pattern.js content.js picker.js popup icons`
 3. Developer Dashboard → **Add new item** → upload the zip
 4. Fill in the listing (description, at least one 1280x800 screenshot, 440x280 small promo tile, category, privacy practices — declare that no data is collected; justify the optional host permission as letting users choose sites where their picks apply automatically)
 5. Submit for review (usually a few days)

@@ -1,9 +1,11 @@
-// Injected by the popup each time "Pick element" is clicked.
+// Injected by the popup each time "Pick element" is clicked. When the popup sets
+// pageHiderRefineId, the pick is merged into that existing rule instead.
 (() => {
   if (globalThis.pageHiderPicking) return;
   globalThis.pageHiderPicking = true;
 
   const host = location.hostname;
+  const refineId = globalThis.pageHiderRefineId;
 
   // The overlay lives in a shadow root so page styles can't reach it, and ignores
   // the pointer so hovering always targets the page underneath.
@@ -43,25 +45,37 @@
         color: #9aa0a6;
         font-size: 12px;
       }
+      .error {
+        color: #f28b82;
+      }
     </style>
     <div class="box"></div>
     <div class="bar">
-      <div class="target">Hover over the part of the page to hide</div>
+      <div class="target"></div>
       <div class="keys">Click to hide · ↑ select parent · ↓ select child · Esc to cancel</div>
     </div>
   `;
   const box = shadow.querySelector(".box");
   const targetLabel = shadow.querySelector(".target");
+  const prompt = refineId
+    ? "Pick the same thing again. Parts that differ from the first pick will be ignored"
+    : "Hover over the part of the page to hide";
+  targetLabel.textContent = prompt;
   document.documentElement.append(overlayHost);
 
   let hovered = null;
   let selected = null;
 
+  // Elements without words, or too large to compare, are matched by position.
+  function canMatchByPattern(tokens) {
+    return tokens.length <= MAX_TOKENS && tokens.some(isWord);
+  }
+
   function describe(element) {
-    const text = normalizeText(element.textContent);
-    if (!text) return `<${element.localName}> (no text, matched by position on the page)`;
-    if (text.length > MAX_TEXT_LENGTH) return `<${element.localName}> (too much text, matched by position on the page)`;
-    return `<${element.localName}> "${text.length > 80 ? `${text.slice(0, 80)}…` : text}"`;
+    const tokens = tokenize(element, MAX_TOKENS);
+    if (canMatchByPattern(tokens)) return describePattern(tokens);
+    const reason = tokens.length > MAX_TOKENS ? "too large" : "no text";
+    return `<${element.localName}> (${reason}, matched by position on the page)`;
   }
 
   function select(element) {
@@ -75,28 +89,7 @@
       height: `${rect.height}px`,
     });
     targetLabel.textContent = describe(element);
-  }
-
-  function longestTextNode(element) {
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-    let longest = "";
-    while (walker.nextNode()) {
-      const value = walker.currentNode.nodeValue.trim();
-      if (value.length > longest.length) longest = value;
-    }
-    return longest;
-  }
-
-  // Counts ancestors between the anchor and the picked element that have the same
-  // tag and text, so the content script climbs to the same level next time.
-  function textRank(element, anchor, text) {
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-    while (walker.nextNode() && !walker.currentNode.nodeValue.includes(anchor));
-    let rank = 0;
-    for (let node = walker.currentNode.parentElement; node !== element; node = node.parentElement) {
-      if (node.localName === element.localName && normalizeText(node.textContent) === text) rank++;
-    }
-    return rank;
+    targetLabel.classList.remove("error");
   }
 
   // Ids and aria-labels survive better than position, so they're used where present.
@@ -119,17 +112,21 @@
   }
 
   function buildRule(element) {
-    const text = normalizeText(element.textContent);
     const base = { id: crypto.randomUUID(), label: describe(element) };
-    if (text && text.length <= MAX_TEXT_LENGTH) {
-      const anchor = longestTextNode(element);
-      return { ...base, type: "text", tag: element.localName, text, anchor, rank: textRank(element, anchor, text) };
+    const tokens = tokenize(element, MAX_TOKENS);
+    if (canMatchByPattern(tokens)) {
+      return { ...base, type: "text", tag: element.localName, ...patternFields(tokens, tokens.length) };
     }
     return { ...base, type: "selector", selector: buildSelector(element) };
   }
 
+  // Leaves headroom over the largest pick seen, since the parts that differ can grow.
+  function patternFields(pattern, longest) {
+    return { pattern, anchor: patternAnchor(pattern), maxTokens: longest * 2, label: describePattern(pattern) };
+  }
+
   function isSameRule(a, b) {
-    return a.type === b.type && (a.type === "text" ? a.text === b.text && a.tag === b.tag && a.rank === b.rank : a.selector === b.selector);
+    return a.type === b.type && (a.type === "text" ? JSON.stringify(a.pattern) === JSON.stringify(b.pattern) : a.selector === b.selector);
   }
 
   async function pick(element) {
@@ -138,6 +135,32 @@
     if (!rules.some((existing) => isSameRule(existing, rule))) {
       await saveRules(host, [...rules, rule]);
     }
+    return null;
+  }
+
+  // Returns an error message to show instead of finishing, or null when saved.
+  async function refine(element) {
+    const rules = await loadRules(host);
+    const rule = rules.find((existing) => existing.id === refineId);
+    if (!rule) return null;
+    if (element.localName !== rule.tag) {
+      return `That's a <${element.localName}>, but the first pick was a <${rule.tag}>. Use ↑ / ↓ to pick the same level`;
+    }
+    const tokens = tokenize(element, MAX_TOKENS);
+    if (tokens.length > MAX_TOKENS) return "That's too large to compare. Use ↓ to narrow the selection";
+    const pattern = mergePatterns(rule.pattern, tokens);
+    if (!isSpecificEnough(pattern)) {
+      return "That has too little in common with the first pick to hide safely. Try a wider selection";
+    }
+    const longest = Math.max(rule.maxTokens / 2, tokens.length);
+    const refined = { ...rule, ...patternFields(pattern, longest) };
+    await saveRules(host, rules.map((existing) => (existing.id === refineId ? refined : existing)));
+    return null;
+  }
+
+  function showError(message) {
+    targetLabel.textContent = message;
+    targetLabel.classList.add("error");
   }
 
   function stop() {
@@ -157,10 +180,11 @@
       hovered = event.target;
       if (hovered !== document.documentElement && hovered !== document.body) select(hovered);
     }],
-    ["click", (event) => {
+    ["click", async (event) => {
       swallow(event);
-      if (selected) pick(selected);
-      stop();
+      const error = selected && (await (refineId ? refine(selected) : pick(selected)));
+      if (error) showError(error);
+      else stop();
     }],
     ["keydown", (event) => {
       if (event.key === "Escape") {
