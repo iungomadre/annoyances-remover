@@ -7,6 +7,7 @@
   --accent: #1a73e8;
   --surface: #f6f8fc;
   --hover: #e3e7ee;
+  --row-hover: #edf1f8;
   --danger: #d93025;
   --warning: #b06000;
   color-scheme: light dark;
@@ -22,6 +23,7 @@
     --accent: #8ab4f8;
     --surface: #292a2d;
     --hover: #3c4043;
+    --row-hover: #303134;
     --danger: #f28b82;
     --warning: #fdd663;
   }
@@ -203,6 +205,15 @@ h3 {
 
 .rule-meta.warning {
   color: var(--warning);
+}
+
+.rule-status {
+  color: var(--accent);
+  font-size: 11.5px;
+}
+
+#rules li:hover {
+  background: var(--row-hover);
 }
 
 .icon-button {

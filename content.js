@@ -20,6 +20,7 @@
   const selectorStyle = document.createElement("style");
   document.head.append(baseStyle, selectorStyle);
 
+  let allRules = [];
   let textRules = [];
   const marked = new Set();
 
@@ -119,6 +120,7 @@
 
   function applyRules(rules) {
     // Text picks saved before patterns existed have no pattern and are skipped.
+    allRules = rules;
     textRules = rules.filter((rule) => rule.type === "text" && rule.pattern);
     // One CSS rule per selector, so a single invalid selector can't void the rest.
     selectorStyle.textContent = rules
@@ -130,6 +132,80 @@
       .join("\n");
     checkPage();
   }
+
+  function elementsForRule(rule) {
+    if (rule.type === "selector") {
+      try {
+        return [...document.querySelectorAll(rule.selector)];
+      } catch {
+        return [];
+      }
+    }
+    return rule.pattern ? [...marked].filter((element) => matchesRule(element, rule)) : [];
+  }
+
+  // Outlines where a pick's elements sit while the user hovers it in the popup.
+  // Hidden elements keep their layout, so their boxes are still accurate.
+  let highlightHost = null;
+  let highlightTargets = [];
+
+  function drawHighlight() {
+    if (!highlightHost) return;
+    const boxes = highlightTargets
+      .filter((element) => element.isConnected)
+      .map((element) => element.getBoundingClientRect())
+      .filter((rect) => rect.width || rect.height)
+      .map((rect) => {
+        const box = document.createElement("div");
+        box.className = "box";
+        Object.assign(box.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
+        return box;
+      });
+    highlightHost.shadowRoot.querySelector(".boxes").replaceChildren(...boxes);
+    requestAnimationFrame(drawHighlight);
+  }
+
+  function highlightRule(ruleId) {
+    highlightHost?.remove();
+    highlightHost = null;
+    const rule = allRules.find((candidate) => candidate.id === ruleId);
+    if (!rule) return { found: 0, visible: 0 };
+
+    highlightTargets = elementsForRule(rule);
+    highlightHost = document.createElement("div");
+    highlightHost.style.cssText = "all: initial; position: fixed; inset: 0; z-index: 2147483647; pointer-events: none;";
+    highlightHost.attachShadow({ mode: "open" }).innerHTML = `
+      <style>
+        .box {
+          position: fixed;
+          box-sizing: border-box;
+          border: 2px dashed #1a73e8;
+          border-radius: 4px;
+          background: repeating-linear-gradient(-45deg, rgb(26 115 232 / 0.18) 0 6px, rgb(26 115 232 / 0.06) 6px 12px);
+        }
+      </style>
+      <div class="boxes"></div>
+    `;
+    document.documentElement.append(highlightHost);
+    drawHighlight();
+
+    const visible = highlightTargets.filter((element) => {
+      const rect = element.getBoundingClientRect();
+      return (rect.width || rect.height) && rect.bottom > 0 && rect.right > 0 && rect.top < innerHeight && rect.left < innerWidth;
+    }).length;
+    return { found: highlightTargets.length, visible };
+  }
+
+  // The popup keeps a port open while it's showing, so the highlight is cleared
+  // even when it closes mid-hover.
+  chrome.runtime.onConnect.addListener((port) => {
+    if (port.name !== "popup") return;
+    port.onMessage.addListener(({ highlight }) => {
+      const result = highlightRule(highlight);
+      if (highlight) port.postMessage({ ruleId: highlight, ...result });
+    });
+    port.onDisconnect.addListener(() => highlightRule(null));
+  });
 
   function applyEnabled(enabled) {
     document.documentElement.classList.toggle(ENABLED_CLASS, enabled);

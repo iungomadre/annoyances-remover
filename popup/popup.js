@@ -41,6 +41,20 @@ async function ensureContentScript(tabId) {
 }
 
 let contentScriptReady;
+let pagePort = null;
+const ruleStatus = new Map();
+
+function highlightOnPage(ruleId) {
+  pagePort?.postMessage({ highlight: ruleId });
+}
+
+// Tells the user why nothing lit up on the page when that's the case.
+function showHighlightResult({ ruleId, found, visible }) {
+  const status = ruleStatus.get(ruleId);
+  if (!status) return;
+  status.textContent = !found ? "Not on the page right now" : !visible ? "On the page, but scrolled out of view" : "";
+  status.hidden = !status.textContent;
+}
 
 async function startPicker(tabId, { refineId = null, autoApply }) {
   // The picker relies on the content script's helpers being on the page.
@@ -103,6 +117,7 @@ function iconButton(kind, label, onClick) {
 }
 
 function renderRules(tabId, host, rules) {
+  ruleStatus.clear();
   rulesList.replaceChildren(
     ...rules.map((rule) => {
       const { title, meta, warning } = describeRule(rule);
@@ -116,7 +131,16 @@ function renderRules(tabId, host, rules) {
       const metaElement = document.createElement("span");
       metaElement.className = warning ? "rule-meta warning" : "rule-meta";
       metaElement.textContent = meta;
-      text.append(titleElement, metaElement);
+      const status = document.createElement("span");
+      status.className = "rule-status";
+      status.hidden = true;
+      ruleStatus.set(rule.id, status);
+      text.append(titleElement, metaElement, status);
+      item.addEventListener("mouseenter", () => highlightOnPage(rule.id));
+      item.addEventListener("mouseleave", () => {
+        highlightOnPage(null);
+        status.hidden = true;
+      });
       item.append(text);
       if (rule.type === "text" && rule.pattern) {
         item.append(
@@ -151,7 +175,10 @@ async function init() {
   // Injecting waits for the page to respond, which can be slow on busy pages,
   // so the popup is filled in from storage without waiting for it.
   contentScriptReady = ensureContentScript(tab.id);
-  contentScriptReady.catch(showUnsupported);
+  contentScriptReady.then(() => {
+    pagePort = chrome.tabs.connect(tab.id, { name: "popup" });
+    pagePort.onMessage.addListener(showHighlightResult);
+  }, showUnsupported);
 
   siteSection.hidden = false;
   document.getElementById("site-name").textContent = site.host;
