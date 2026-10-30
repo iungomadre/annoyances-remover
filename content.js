@@ -17,14 +17,28 @@ function findPopupRoot(textElement) {
   return root;
 }
 
-function removeWarning() {
+const HIDDEN_ATTR = "data-mute-warning-remover-hidden";
+const ENABLED_CLASS = "mute-warning-remover-enabled";
+
+// visibility (not display: none) keeps the popup laid out and animating, so Meet's
+// own show/hide logic still works and the popup can be revealed again intact.
+const style = document.createElement("style");
+style.textContent = `
+  html.${ENABLED_CLASS} [${HIDDEN_ATTR}],
+  html.${ENABLED_CLASS} [${HIDDEN_ATTR}] * {
+    visibility: hidden !important;
+  }
+`;
+document.head.appendChild(style);
+
+function markWarnings() {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   while (walker.nextNode()) {
     const textNode = walker.currentNode;
     if (!textNode.nodeValue.includes(TRIGGER_TEXT)) continue;
     const element = textNode.parentElement;
-    if (!element) continue;
-    findPopupRoot(element).remove();
+    if (!element || element.closest(`[${HIDDEN_ATTR}]`)) continue;
+    findPopupRoot(element).setAttribute(HIDDEN_ATTR, "");
   }
 }
 
@@ -34,8 +48,20 @@ new MutationObserver(() => {
   scheduled = true;
   requestAnimationFrame(() => {
     scheduled = false;
-    removeWarning();
+    markWarnings();
   });
 }).observe(document.body, { childList: true, subtree: true });
 
-removeWarning();
+markWarnings();
+
+function applyEnabled(enabled) {
+  document.documentElement.classList.toggle(ENABLED_CLASS, enabled);
+}
+
+loadSettings().then((settings) => applyEnabled(settings.enabled));
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "sync" && "enabled" in changes) {
+    applyEnabled(changes.enabled.newValue);
+  }
+});
