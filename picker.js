@@ -54,7 +54,7 @@
     <div class="box"></div>
     <div class="bar">
       <div class="target"></div>
-      <div class="keys">Click to hide · ↑ select parent · ↓ select child · Esc to cancel</div>
+      <div class="keys">Click or Enter to hide · ↑ select parent · ↓ select child · Esc to cancel</div>
     </div>
   `;
   const box = shadow.querySelector(".box");
@@ -191,6 +191,12 @@
     setTimeout(() => overlayHost.remove(), 6000);
   }
 
+  async function confirm() {
+    const error = await (refineId ? refine(selected) : pick(selected));
+    if (error) showError(error);
+    else finish();
+  }
+
   function swallow(event) {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -202,15 +208,16 @@
       hovered = event.target;
       if (hovered !== document.documentElement && hovered !== document.body) select(hovered);
     }],
-    ["click", async (event) => {
+    ["click", (event) => {
       swallow(event);
-      if (!selected) return stop();
-      const error = await (refineId ? refine(selected) : pick(selected));
-      if (error) showError(error);
-      else finish();
+      if (selected) confirm();
+      else stop();
     }],
     ["keydown", (event) => {
-      if (event.key === "Escape") {
+      if (event.key === "Enter" && selected) {
+        swallow(event);
+        confirm();
+      } else if (event.key === "Escape") {
         swallow(event);
         stop();
       } else if (event.key === "ArrowUp" && selected) {
