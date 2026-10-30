@@ -1,67 +1,100 @@
-const TRIGGER_TEXT = "Microphone muted by system";
-const MAX_POPUP_TEXT_LENGTH = 400;
+// Injected both by the registered content script and on demand by the popup,
+// so it must only start once per page.
+(() => {
+  if (globalThis.pageHiderLoaded) return;
+  globalThis.pageHiderLoaded = true;
 
-function findPopupRoot(textElement) {
-  let node = textElement;
-  let root = textElement;
+  const HIDDEN_ATTR = "data-page-hider-hidden";
+  const ENABLED_CLASS = "page-hider-enabled";
+  const host = location.hostname;
 
-  while (node.parentElement && node.parentElement !== document.body) {
-    const parent = node.parentElement;
-    if (parent.textContent.length > MAX_POPUP_TEXT_LENGTH) break;
-    if (parent.querySelector("[role='toolbar'], video, [role='main']")) break;
-    root = parent;
-    node = parent;
-    if (parent.matches("[role='dialog'], [role='alertdialog'], [role='tooltip']")) break;
+  // visibility (not display: none) keeps hidden elements laid out and animating, so
+  // the page's own show/hide logic still works and they can be revealed again intact.
+  const baseStyle = document.createElement("style");
+  baseStyle.textContent = `
+    html.${ENABLED_CLASS} [${HIDDEN_ATTR}],
+    html.${ENABLED_CLASS} [${HIDDEN_ATTR}] * {
+      visibility: hidden !important;
+    }
+  `;
+  const selectorStyle = document.createElement("style");
+  document.head.append(baseStyle, selectorStyle);
+
+  let textRules = [];
+
+  // Climbs from the text node containing the rule's anchor to the rank-th
+  // ancestor with the picked element's tag and full text.
+  function findRuleElement(element, rule) {
+    let rank = 0;
+    for (; element && element !== document.body; element = element.parentElement) {
+      const text = normalizeText(element.textContent);
+      if (text.length > rule.text.length) return null;
+      if (text !== rule.text || element.localName !== rule.tag) continue;
+      if (rank === rule.rank) return element;
+      rank++;
+    }
+    return null;
   }
 
-  return root;
-}
+  function markMatches() {
+    const matched = new Set();
+    if (textRules.length) {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const textNode = walker.currentNode;
+        for (const rule of textRules) {
+          if (!textNode.nodeValue.includes(rule.anchor)) continue;
+          const element = findRuleElement(textNode.parentElement, rule);
+          if (element) matched.add(element);
+        }
+      }
+    }
 
-const HIDDEN_ATTR = "data-mute-warning-remover-hidden";
-const ENABLED_CLASS = "mute-warning-remover-enabled";
-
-// visibility (not display: none) keeps the popup laid out and animating, so Meet's
-// own show/hide logic still works and the popup can be revealed again intact.
-const style = document.createElement("style");
-style.textContent = `
-  html.${ENABLED_CLASS} [${HIDDEN_ATTR}],
-  html.${ENABLED_CLASS} [${HIDDEN_ATTR}] * {
-    visibility: hidden !important;
+    for (const element of document.querySelectorAll(`[${HIDDEN_ATTR}]`)) {
+      if (!matched.has(element)) element.removeAttribute(HIDDEN_ATTR);
+    }
+    for (const element of matched) {
+      element.setAttribute(HIDDEN_ATTR, "");
+    }
   }
-`;
-document.head.appendChild(style);
 
-function markWarnings() {
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  while (walker.nextNode()) {
-    const textNode = walker.currentNode;
-    if (!textNode.nodeValue.includes(TRIGGER_TEXT)) continue;
-    const element = textNode.parentElement;
-    if (!element || element.closest(`[${HIDDEN_ATTR}]`)) continue;
-    findPopupRoot(element).setAttribute(HIDDEN_ATTR, "");
+  function applyRules(rules) {
+    textRules = rules.filter((rule) => rule.type === "text");
+    // One CSS rule per selector, so a single invalid selector can't void the rest.
+    selectorStyle.textContent = rules
+      .filter((rule) => rule.type === "selector")
+      .map(
+        (rule) =>
+          `html.${ENABLED_CLASS} ${rule.selector}, html.${ENABLED_CLASS} ${rule.selector} * { visibility: hidden !important; }`,
+      )
+      .join("\n");
+    markMatches();
   }
-}
 
-let scheduled = false;
-new MutationObserver(() => {
-  if (scheduled) return;
-  scheduled = true;
-  requestAnimationFrame(() => {
-    scheduled = false;
-    markWarnings();
+  function applyEnabled(enabled) {
+    document.documentElement.classList.toggle(ENABLED_CLASS, enabled);
+  }
+
+  let scheduled = false;
+  new MutationObserver(() => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      markMatches();
+    });
+  }).observe(document.body, { childList: true, subtree: true, characterData: true });
+
+  loadSettings().then((settings) => applyEnabled(settings.enabled));
+  loadRules(host).then(applyRules);
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "sync" && "enabled" in changes) {
+      applyEnabled(changes.enabled.newValue);
+    }
+    const key = rulesKey(host);
+    if (area === "local" && key in changes) {
+      applyRules(changes[key].newValue ?? []);
+    }
   });
-}).observe(document.body, { childList: true, subtree: true });
-
-markWarnings();
-
-function applyEnabled(enabled) {
-  document.documentElement.classList.toggle(ENABLED_CLASS, enabled);
-}
-
-loadSettings().then((settings) => applyEnabled(settings.enabled));
-
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "sync" && "enabled" in changes) {
-    applyEnabled(changes.enabled.newValue);
-  }
-});
+})();

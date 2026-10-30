@@ -2,15 +2,24 @@
   "manifest_version": 3,
   "name": "Meet Mute Warning Remover",
   "version": "1.0.0",
-  "description": "Removes the \"Microphone muted by system\" popup that overlaps shared content in Google Meet.",
+  "description": "Pick parts of a web page to hide, like Google Meet's \"Microphone muted by system\" popup, and keep them hidden.",
   "icons": {
     "16": "icons/16.png",
     "48": "icons/48.png",
     "128": "icons/128.png"
   },
   "permissions": [
-    "storage"
+    "storage",
+    "activeTab",
+    "scripting"
   ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": {
@@ -18,17 +27,5 @@
       "48": "icons/48.png",
       "128": "icons/128.png"
     }
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://meet.google.com/*"
-      ],
-      "js": [
-        "settings.js",
-        "content.js"
-      ],
-      "run_at": "document_idle"
-    }
-  ]
+  }
 }

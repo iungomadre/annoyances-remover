@@ -12,11 +12,27 @@
     <main>
       <label class="option">
         <span class="option-text">
-          <span class="option-title">Hide mute warning</span>
-          <span class="option-hint">Removes the "Microphone muted by system" popup</span>
+          <span class="option-title">Hide picked elements</span>
+          <span class="option-hint">Turn off to show everything again</span>
         </span>
         <input type="checkbox" class="switch" data-setting="enabled" />
       </label>
+
+      <section id="site" hidden>
+        <h2 id="site-name"></h2>
+        <label class="option">
+          <span class="option-text">
+            <span class="option-title">Apply on every visit</span>
+            <span class="option-hint">Otherwise picks only apply after you open this popup</span>
+          </span>
+          <input type="checkbox" class="switch" id="auto-apply" />
+        </label>
+        <ul id="rules"></ul>
+        <p id="no-rules" class="empty">Nothing hidden on this site yet.</p>
+        <button id="pick" type="button">Pick element to hide</button>
+      </section>
+
+      <p id="unsupported" class="empty" hidden>Chrome doesn't allow extensions to run on this page.</p>
     </main>
     <script src="../settings.js"></script>
     <script src="popup.js"></script>
