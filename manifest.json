@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Meet Mute Warning Remover",
+  "name": "Annoyance Remover",
   "version": "1.0.0",
   "description": "Pick parts of a web page to hide, like Google Meet's \"Microphone muted by system\" popup, and keep them hidden.",
   "icons": {

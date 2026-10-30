@@ -1,4 +1,4 @@
-# Meet Mute Warning Remover
+# Annoyance Remover
 
 Chrome extension (Manifest V3) for hiding parts of web pages you don't want to see, such as the "Microphone muted by system" popup that Google Meet shows over shared content.
 
