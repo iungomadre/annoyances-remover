@@ -1,13 +1,11 @@
 // Injected by the popup each time "Pick element" is clicked. When the popup sets
 // pageHiderRefineId, the pick is merged into that existing rule instead.
-// pageHiderAutoApply tells it whether picks apply on every visit to this site.
 (() => {
   if (globalThis.pageHiderPicking) return;
   globalThis.pageHiderPicking = true;
 
   const host = location.hostname;
   const refineId = globalThis.pageHiderRefineId;
-  const autoApply = globalThis.pageHiderAutoApply;
 
   // The overlay lives in a shadow root so page styles can't reach it, and ignores
   // the pointer so hovering always targets the page underneath.
@@ -176,19 +174,14 @@
   }
 
   // Turns hiding on (a pick should take effect even if it was switched off) and
-  // tells the user where the pick will apply, since that's easy to forget.
+  // briefly confirms it, pointing to the popup for the rest.
   async function finish() {
     stopListening();
     await chrome.storage.sync.set({ enabled: true });
     box.style.display = "none";
-    targetLabel.style.whiteSpace = "normal";
-    targetLabel.textContent = autoApply
-      ? `Hidden. This will be hidden every time you visit ${host}`
-      : `Hidden. This will be hidden again whenever you open Annoyance Remover on ${host}`;
-    shadow.querySelector(".keys").textContent = autoApply
-      ? "Change or undo this from the extension icon in the toolbar"
-      : 'To hide it on every visit, turn on "Apply on every visit" from the extension icon in the toolbar';
-    setTimeout(() => overlayHost.remove(), 6000);
+    targetLabel.textContent = "Hidden";
+    shadow.querySelector(".keys").textContent = "More options under the extension icon";
+    setTimeout(() => overlayHost.remove(), 3000);
   }
 
   async function confirm() {

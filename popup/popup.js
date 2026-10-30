@@ -56,16 +56,15 @@ function showHighlightResult({ ruleId, found, visible }) {
   status.hidden = !status.textContent;
 }
 
-async function startPicker(tabId, { refineId = null, autoApply }) {
+async function startPicker(tabId, refineId = null) {
   // The picker relies on the content script's helpers being on the page.
   await contentScriptReady;
   await chrome.scripting.executeScript({
     target: { tabId },
-    func: (id, auto) => {
+    func: (id) => {
       globalThis.pageHiderRefineId = id;
-      globalThis.pageHiderAutoApply = auto;
     },
-    args: [refineId, autoApply],
+    args: [refineId],
   });
   await chrome.scripting.executeScript({ target: { tabId }, files: ["picker.js"] });
   window.close();
@@ -145,7 +144,7 @@ function renderRules(tabId, host, rules) {
       if (rule.type === "text" && rule.pattern) {
         item.append(
           iconButton("refine", "Content changed? Pick it again and the parts that differ will be ignored", () =>
-            startPicker(tabId, { refineId: rule.id, autoApply: autoApply.checked }),
+            startPicker(tabId, rule.id),
           ),
         );
       }
@@ -200,7 +199,7 @@ async function init() {
     if (!ok) autoApply.checked = !autoApply.checked;
   });
 
-  document.getElementById("pick").addEventListener("click", () => startPicker(tab.id, { autoApply: autoApply.checked }));
+  document.getElementById("pick").addEventListener("click", () => startPicker(tab.id));
 }
 
 init();
