@@ -1,20 +1,48 @@
 # Annoyance Remover
 
-Chrome extension (Manifest V3) for hiding parts of web pages you don't want to see, such as the "Microphone muted by system" popup that Google Meet shows over shared content.
+A Chrome extension for hiding the parts of web pages you don't want to see: popups, banners, notices, buttons, anything. Point at it once, and it stays hidden every time it shows up again.
 
-## Usage
+## Hiding something
 
-1. Click the extension icon on the page and choose **Pick element to hide**
-2. Hover over what you want gone. **↑** / **↓** widen or narrow the selection, **Esc** cancels
-3. Click to hide it. It's saved for that site and hidden again whenever it reappears
+1. Click the extension icon and choose **Pick element to hide**
+2. Hover over what you want gone. **↑** / **↓** widen or narrow the selection
+3. Click or press **Enter** to hide it (**Esc** cancels)
 
-Picks are remembered by their text and the layout of elements inside them, so they keep working when the site changes its styling and in any language. Elements without text (or very large ones) are remembered by their position on the page instead, which can break when the site updates.
+The pick is saved for that site. Whenever the same thing appears again, even after the page changes or reloads, it's hidden straight away.
 
-If a pick's content changes between visits (say "Alice is presenting" becomes "Bob is presenting"), click **↻** next to it in the popup and pick it again. The parts that differ are ignored from then on (here, the name), and the rest still has to match. If the text differs completely, only the layout is compared. Picks with too little in common to hide safely are refused.
+Hidden elements are made invisible rather than removed, so the page keeps working as normal around them and they can be shown again at any time.
 
-By default, picks apply once you open the popup on a page. Turn on **Apply on every visit** to hide them automatically on that site; Chrome asks for access to the site the first time. Picking something also turns hiding back on if it was switched off.
+## How picks are recognised
 
-The **Hide picked elements** switch shows everything again without reloading. Remove a pick with **×** in the popup.
+A pick is remembered by its text and the arrangement of elements inside it, not by the site's internal code. That means it keeps working when the site restyles itself, and it works in any language.
+
+Elements without text, or very large ones, are remembered by their position on the page instead. That can break when the site changes its layout.
+
+### Content that changes
+
+Some things look the same every time but say something slightly different, like "Alice is presenting" one day and "Bob is presenting" the next. To handle that, click **↻** next to the pick in the popup and pick it again. Whatever differs between the two is ignored from then on (here, the name), while the rest still has to match. If the text is completely different, only the layout is compared.
+
+If the two picks have too little in common to hide safely, the extension says so instead of saving, so it doesn't end up hiding unrelated parts of the page.
+
+## Managing picks
+
+The popup lists everything hidden on the current site, with how each pick is matched:
+
+- **Hover** a pick to see where it is on the page
+- **↻** picks it again to ignore content that changes
+- **×** stops hiding it
+
+The **Hide picked elements** switch at the top shows everything again without reloading, and hides it again when switched back on.
+
+## Where picks apply
+
+By default, picks apply once you open the popup on a page, so the extension needs no access to any site up front.
+
+To have them hidden automatically on every visit, turn on **Apply on every visit** for that site. Chrome asks for access to that one site the first time. Turning it off removes the access again.
+
+## Privacy
+
+Nothing leaves your browser. Picks are stored locally in Chrome; only the on/off switch syncs between your devices through your Chrome account.
 
 ## Load locally
 
