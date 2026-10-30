@@ -39,7 +39,11 @@ async function ensureContentScript(tabId) {
   }
 }
 
+let contentScriptReady;
+
 async function startPicker(tabId, refineId = null) {
+  // The picker relies on the content script's helpers being on the page.
+  await contentScriptReady;
   await chrome.scripting.executeScript({
     target: { tabId },
     func: (id) => {
@@ -84,24 +88,34 @@ function renderRules(tabId, host, rules) {
 async function init() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const site = activeSite(tab);
-  try {
-    if (!site) throw new Error("Unsupported page");
-    await ensureContentScript(tab.id);
-  } catch {
+  const showUnsupported = () => {
+    siteSection.hidden = true;
     document.getElementById("unsupported").hidden = false;
+  };
+  if (!site) {
+    showUnsupported();
     return;
   }
+
+  // Injecting waits for the page to respond, which can be slow on busy pages,
+  // so the popup is filled in from storage without waiting for it.
+  contentScriptReady = ensureContentScript(tab.id);
+  contentScriptReady.catch(showUnsupported);
 
   siteSection.hidden = false;
   document.getElementById("site-name").textContent = site.host;
 
-  renderRules(tab.id, site.host, await loadRules(site.host));
+  const [rules, autoApplyGranted] = await Promise.all([
+    loadRules(site.host),
+    chrome.permissions.contains({ origins: [site.origin] }),
+  ]);
+  renderRules(tab.id, site.host, rules);
   chrome.storage.onChanged.addListener((changes, area) => {
     const key = rulesKey(site.host);
     if (area === "local" && key in changes) renderRules(tab.id, site.host, changes[key].newValue ?? []);
   });
 
-  autoApply.checked = await chrome.permissions.contains({ origins: [site.origin] });
+  autoApply.checked = autoApplyGranted;
   autoApply.addEventListener("change", async () => {
     const permissions = { origins: [site.origin] };
     const ok = autoApply.checked ? await chrome.permissions.request(permissions) : await chrome.permissions.remove(permissions);
