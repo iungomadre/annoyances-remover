@@ -12,7 +12,7 @@ Picks are remembered by their text and the layout of elements inside them, so th
 
 If a pick's content changes between visits (say "Alice is presenting" becomes "Bob is presenting"), click **↻** next to it in the popup and pick it again. The parts that differ are ignored from then on (here, the name), and the rest still has to match. If the text differs completely, only the layout is compared. Picks with too little in common to hide safely are refused.
 
-Picking something turns on **Apply on every visit** for that site, so it's hidden automatically from then on; Chrome asks for access to the site the first time. If you decline, or turn the switch off later, picks apply only once you open the popup on a page. Picking also turns hiding back on if it was switched off.
+By default, picks apply once you open the popup on a page. Turn on **Apply on every visit** to hide them automatically on that site; Chrome asks for access to the site the first time. Picking something also turns hiding back on if it was switched off.
 
 The **Hide picked elements** switch shows everything again without reloading. Remove a pick with **×** in the popup.
 

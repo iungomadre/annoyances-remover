@@ -123,15 +123,7 @@ async function init() {
     if (!ok) autoApply.checked = !autoApply.checked;
   });
 
-  // New picks turn on "Apply on every visit". Chrome only lets the popup ask for
-  // site access in response to a click here, so it's asked before picking rather
-  // than after. Picking goes ahead either way.
-  document.getElementById("pick").addEventListener("click", async () => {
-    if (!autoApply.checked) {
-      autoApply.checked = await chrome.permissions.request({ origins: [site.origin] }).catch(() => false);
-    }
-    startPicker(tab.id, { autoApply: autoApply.checked });
-  });
+  document.getElementById("pick").addEventListener("click", () => startPicker(tab.id, { autoApply: autoApply.checked }));
 }
 
 init();
