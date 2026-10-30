@@ -1,11 +1,13 @@
 // Injected by the popup each time "Pick element" is clicked. When the popup sets
 // pageHiderRefineId, the pick is merged into that existing rule instead.
+// pageHiderAutoApply tells it whether picks apply on every visit to this site.
 (() => {
   if (globalThis.pageHiderPicking) return;
   globalThis.pageHiderPicking = true;
 
   const host = location.hostname;
   const refineId = globalThis.pageHiderRefineId;
+  const autoApply = globalThis.pageHiderAutoApply;
 
   // The overlay lives in a shadow root so page styles can't reach it, and ignores
   // the pointer so hovering always targets the page underneath.
@@ -163,10 +165,28 @@
     targetLabel.classList.add("error");
   }
 
-  function stop() {
+  function stopListening() {
     globalThis.pageHiderPicking = false;
-    overlayHost.remove();
     for (const [type, handler] of listeners) window.removeEventListener(type, handler, true);
+  }
+
+  function stop() {
+    stopListening();
+    overlayHost.remove();
+  }
+
+  // Turns hiding on (a pick should take effect even if it was switched off) and
+  // tells the user where the pick will apply, since that's easy to forget.
+  async function finish() {
+    stopListening();
+    await chrome.storage.sync.set({ enabled: true });
+    box.style.display = "none";
+    targetLabel.style.whiteSpace = "normal";
+    targetLabel.textContent = autoApply
+      ? `Hidden. This will be hidden every time you visit ${host}`
+      : `Hidden. This will be hidden again whenever you open Annoyance Remover on ${host}`;
+    shadow.querySelector(".keys").textContent = "Change or undo this from the extension icon in the toolbar";
+    setTimeout(() => overlayHost.remove(), 6000);
   }
 
   function swallow(event) {
@@ -182,9 +202,10 @@
     }],
     ["click", async (event) => {
       swallow(event);
-      const error = selected && (await (refineId ? refine(selected) : pick(selected)));
+      if (!selected) return stop();
+      const error = await (refineId ? refine(selected) : pick(selected));
       if (error) showError(error);
-      else stop();
+      else finish();
     }],
     ["keydown", (event) => {
       if (event.key === "Escape") {

@@ -41,15 +41,16 @@ async function ensureContentScript(tabId) {
 
 let contentScriptReady;
 
-async function startPicker(tabId, refineId = null) {
+async function startPicker(tabId, { refineId = null, autoApply }) {
   // The picker relies on the content script's helpers being on the page.
   await contentScriptReady;
   await chrome.scripting.executeScript({
     target: { tabId },
-    func: (id) => {
+    func: (id, auto) => {
       globalThis.pageHiderRefineId = id;
+      globalThis.pageHiderAutoApply = auto;
     },
-    args: [refineId],
+    args: [refineId, autoApply],
   });
   await chrome.scripting.executeScript({ target: { tabId }, files: ["picker.js"] });
   window.close();
@@ -68,7 +69,7 @@ function renderRules(tabId, host, rules) {
         refine.type = "button";
         refine.textContent = "↻";
         refine.title = "Its content changed? Pick it again and the parts that differ will be ignored";
-        refine.addEventListener("click", () => startPicker(tabId, rule.id));
+        refine.addEventListener("click", () => startPicker(tabId, { refineId: rule.id, autoApply: autoApply.checked }));
         item.append(refine);
       }
       const remove = document.createElement("button");
@@ -122,7 +123,15 @@ async function init() {
     if (!ok) autoApply.checked = !autoApply.checked;
   });
 
-  document.getElementById("pick").addEventListener("click", () => startPicker(tab.id));
+  // New picks turn on "Apply on every visit". Chrome only lets the popup ask for
+  // site access in response to a click here, so it's asked before picking rather
+  // than after. Picking goes ahead either way.
+  document.getElementById("pick").addEventListener("click", async () => {
+    if (!autoApply.checked) {
+      autoApply.checked = await chrome.permissions.request({ origins: [site.origin] }).catch(() => false);
+    }
+    startPicker(tab.id, { autoApply: autoApply.checked });
+  });
 }
 
 init();
