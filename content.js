@@ -21,6 +21,7 @@
   document.head.append(baseStyle, selectorStyle);
 
   let textRules = [];
+  const marked = new Set();
 
   function prefixLength(pattern) {
     const wildcard = pattern.indexOf(null);
@@ -40,18 +41,15 @@
     return tokens.length <= rule.maxTokens && matchesPattern(tokens, rule.pattern);
   }
 
-  function findMatches(rule, matched) {
-    if (!rule.anchor) {
-      for (const element of document.body.getElementsByTagName(rule.tag)) {
-        if (matchesRule(element, rule)) matched.add(element);
-      }
-      return;
-    }
+  function matchesAnyRule(element) {
+    return textRules.some((rule) => matchesRule(element, rule));
+  }
 
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    while (walker.nextNode()) {
-      if (!walker.currentNode.nodeValue.includes(rule.anchor)) continue;
-      for (let element = walker.currentNode.parentElement; element && element !== document.body; element = element.parentElement) {
+  // A change inside an element can only affect whether it or its ancestors match.
+  function checkAncestors(node, matched) {
+    const start = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    for (const rule of textRules) {
+      for (let element = start; element && element !== document.body; element = element.parentElement) {
         if (element.localName !== rule.tag) continue;
         // Ancestors only get bigger, so once one is too large none will match.
         if (tokenize(element, rule.maxTokens).length > rule.maxTokens) break;
@@ -63,16 +61,60 @@
     }
   }
 
-  function markMatches() {
-    const matched = new Set();
-    for (const rule of textRules) findMatches(rule, matched);
+  // Finds matches anywhere inside newly added content (or the whole page).
+  function checkSubtree(root, matched) {
+    for (const rule of textRules) {
+      if (!rule.anchor) {
+        for (const element of root.getElementsByTagName(rule.tag)) {
+          if (matchesRule(element, rule)) matched.add(element);
+        }
+        continue;
+      }
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        if (walker.currentNode.nodeValue.includes(rule.anchor)) checkAncestors(walker.currentNode, matched);
+      }
+    }
+  }
 
-    for (const element of document.querySelectorAll(`[${HIDDEN_ATTR}]`)) {
-      if (!matched.has(element)) element.removeAttribute(HIDDEN_ATTR);
+  function mark(matched) {
+    for (const element of marked) {
+      if (!element.isConnected || (!matched.has(element) && !matchesAnyRule(element))) {
+        element.removeAttribute(HIDDEN_ATTR);
+        marked.delete(element);
+      }
     }
     for (const element of matched) {
       element.setAttribute(HIDDEN_ATTR, "");
+      marked.add(element);
     }
+  }
+
+  function checkPage() {
+    const matched = new Set();
+    checkSubtree(document.body, matched);
+    for (const element of marked) {
+      if (!matched.has(element)) element.removeAttribute(HIDDEN_ATTR);
+    }
+    marked.clear();
+    mark(matched);
+  }
+
+  // Only what changed is re-checked: pages like Meet update constantly, and
+  // rescanning everything on each update keeps the page (and the popup) busy.
+  function checkChanges(records) {
+    const matched = new Set();
+    const changed = new Set();
+    for (const record of records) {
+      changed.add(record.target);
+      for (const node of record.addedNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE) checkSubtree(node, matched);
+      }
+    }
+    for (const node of changed) {
+      if (node.isConnected) checkAncestors(node, matched);
+    }
+    mark(matched);
   }
 
   function applyRules(rules) {
@@ -86,21 +128,24 @@
           `html.${ENABLED_CLASS} ${rule.selector}, html.${ENABLED_CLASS} ${rule.selector} * { visibility: hidden !important; }`,
       )
       .join("\n");
-    markMatches();
+    checkPage();
   }
 
   function applyEnabled(enabled) {
     document.documentElement.classList.toggle(ENABLED_CLASS, enabled);
   }
 
-  let scheduled = false;
-  new MutationObserver(() => {
-    if (scheduled) return;
-    scheduled = true;
-    requestAnimationFrame(() => {
-      scheduled = false;
-      markMatches();
-    });
+  let pending = [];
+  new MutationObserver((records) => {
+    if (!textRules.length) return;
+    if (!pending.length) {
+      requestAnimationFrame(() => {
+        const records = pending;
+        pending = [];
+        checkChanges(records);
+      });
+    }
+    pending.push(...records);
   }).observe(document.body, { childList: true, subtree: true, characterData: true });
 
   loadSettings().then((settings) => applyEnabled(settings.enabled));
