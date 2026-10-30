@@ -185,7 +185,9 @@
     targetLabel.textContent = autoApply
       ? `Hidden. This will be hidden every time you visit ${host}`
       : `Hidden. This will be hidden again whenever you open Annoyance Remover on ${host}`;
-    shadow.querySelector(".keys").textContent = "Change or undo this from the extension icon in the toolbar";
+    shadow.querySelector(".keys").textContent = autoApply
+      ? "Change or undo this from the extension icon in the toolbar"
+      : 'To hide it on every visit, turn on "Apply on every visit" from the extension icon in the toolbar';
     setTimeout(() => overlayHost.remove(), 6000);
   }
 
