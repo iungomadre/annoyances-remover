@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <!-- Simplified for 16px: the card, its ×, and two particles, on whole pixels -->
+  <rect width="16" height="16" rx="3.5" fill="#1a5fd0"/>
+  <rect x="2" y="3" width="9" height="10" rx="1.5" fill="#fff"/>
+  <path d="M4.5 5.5 L8.5 9.5 M8.5 5.5 L4.5 9.5" stroke="#1a5fd0" stroke-width="1.6" stroke-linecap="round"/>
+  <rect x="12" y="4" width="2" height="2" fill="#fff" opacity="0.85"/>
+  <rect x="12" y="9" width="2" height="2" fill="#fff" opacity="0.55"/>
+</svg>
